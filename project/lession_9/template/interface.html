@@ -1,0 +1,980 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dashboard Doanh Thu Sản Phẩm</title>
+
+  <!-- Highcharts – local (served by Flask), fallback cdnjs -->
+  <script>
+    (function() {
+      var base = (location.protocol === 'file:') ? 'http://localhost:5050' : '';
+      document.write('<script src="' + base + '/static/js/highcharts.min.js"><\/script>');
+      document.write('<script src="' + base + '/static/js/exporting.min.js"><\/script>');
+    })();
+  </script>
+
+  <style>
+    /* ─── Reset & base ─────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: #f0f2f5;
+      color: #2d3748;
+      min-height: 100vh;
+    }
+
+    /* ─── Header ───────────────────────────────────── */
+    header {
+      background: linear-gradient(135deg, #1a365d 0%, #2b6cb0 100%);
+      color: #fff;
+      padding: 20px 32px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      box-shadow: 0 2px 12px rgba(0,0,0,.25);
+    }
+    header h1 {
+      font-size: 1.4rem;
+      font-weight: 700;
+      letter-spacing: .5px;
+    }
+    header span {
+      font-size: .85rem;
+      opacity: .75;
+    }
+
+    /* ─── Main layout ──────────────────────────────── */
+    main {
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 28px 24px;
+    }
+
+    /* ─── KPI cards ────────────────────────────────── */
+    .kpi-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin-bottom: 28px;
+    }
+    .kpi-card {
+      background: #fff;
+      border-radius: 12px;
+      padding: 20px 24px;
+      box-shadow: 0 1px 6px rgba(0,0,0,.08);
+      border-left: 4px solid #3182ce;
+      transition: transform .15s;
+    }
+    .kpi-card:hover { transform: translateY(-2px); }
+    .kpi-card:nth-child(2) { border-color: #38a169; }
+    .kpi-card:nth-child(3) { border-color: #d69e2e; }
+    .kpi-card:nth-child(4) { border-color: #805ad5; }
+
+    .kpi-label {
+      font-size: .78rem;
+      color: #718096;
+      text-transform: uppercase;
+      letter-spacing: .8px;
+      margin-bottom: 8px;
+    }
+    .kpi-value {
+      font-size: 1.65rem;
+      font-weight: 700;
+      color: #1a202c;
+    }
+
+    /* ─── Panel / card ─────────────────────────────── */
+    .panel {
+      background: #fff;
+      border-radius: 12px;
+      padding: 24px;
+      box-shadow: 0 1px 6px rgba(0,0,0,.08);
+      margin-bottom: 24px;
+    }
+    .panel-title {
+      font-size: 1rem;
+      font-weight: 700;
+      color: #2d3748;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .panel-title::before {
+      content: '';
+      display: inline-block;
+      width: 4px;
+      height: 18px;
+      background: #3182ce;
+      border-radius: 2px;
+    }
+
+    /* ─── Filter section ───────────────────────────── */
+    .filter-section {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      align-items: flex-start;
+    }
+    .filter-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      flex: 1;
+      min-width: 280px;
+    }
+    .filter-group label {
+      font-size: .8rem;
+      font-weight: 600;
+      color: #4a5568;
+      text-transform: uppercase;
+      letter-spacing: .6px;
+    }
+
+    /* ─── Custom searchable multi-select ───────────── */
+    .ms-wrapper {
+      position: relative;
+    }
+    /* Chip input box */
+    .ms-input-box {
+      min-height: 42px;
+      border: 1.5px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 6px 10px;
+      background: #f7fafc;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+      align-items: center;
+      cursor: text;
+      transition: border-color .2s, background .2s;
+    }
+    .ms-input-box:focus-within {
+      border-color: #3182ce;
+      background: #fff;
+      box-shadow: 0 0 0 3px rgba(49,130,206,.15);
+    }
+    /* chip */
+    .ms-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      background: #ebf8ff;
+      color: #2b6cb0;
+      border: 1px solid #bee3f8;
+      border-radius: 20px;
+      padding: 2px 10px 2px 8px;
+      font-size: .78rem;
+      font-weight: 600;
+      white-space: nowrap;
+      animation: chipIn .15s ease;
+    }
+    @keyframes chipIn { from { opacity:0; transform:scale(.8); } to { opacity:1; transform:scale(1); } }
+    .ms-chip-remove {
+      cursor: pointer;
+      font-size: .9rem;
+      line-height: 1;
+      color: #63b3ed;
+      padding: 0 1px;
+      border-radius: 50%;
+      transition: background .15s;
+    }
+    .ms-chip-remove:hover { background: #bee3f8; color: #2b6cb0; }
+    /* search input inside box */
+    .ms-search {
+      border: none;
+      outline: none;
+      background: transparent;
+      font-size: .88rem;
+      color: #2d3748;
+      min-width: 100px;
+      flex: 1;
+      padding: 2px 4px;
+    }
+    .ms-search::placeholder { color: #a0aec0; }
+    /* dropdown list */
+    .ms-dropdown {
+      position: absolute;
+      top: calc(100% + 4px);
+      left: 0; right: 0;
+      background: #fff;
+      border: 1.5px solid #e2e8f0;
+      border-radius: 8px;
+      box-shadow: 0 8px 24px rgba(0,0,0,.12);
+      max-height: 220px;
+      overflow-y: auto;
+      z-index: 100;
+      display: none;
+    }
+    .ms-dropdown.open { display: block; }
+    .ms-dropdown-empty {
+      padding: 14px 16px;
+      color: #a0aec0;
+      font-size: .85rem;
+      text-align: center;
+    }
+    .ms-option {
+      padding: 9px 14px;
+      font-size: .88rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: #2d3748;
+      transition: background .1s;
+    }
+    .ms-option:hover   { background: #ebf8ff; }
+    .ms-option.selected { background: #ebf8ff; color: #2b6cb0; font-weight: 600; }
+    .ms-option .ms-check {
+      width: 16px; height: 16px;
+      border: 2px solid #cbd5e0;
+      border-radius: 4px;
+      flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-size: .7rem;
+      transition: background .15s, border-color .15s;
+    }
+    .ms-option.selected .ms-check {
+      background: #3182ce;
+      border-color: #3182ce;
+      color: #fff;
+    }
+    /* select-all row */
+    .ms-select-all {
+      padding: 8px 14px;
+      font-size: .8rem;
+      font-weight: 600;
+      color: #3182ce;
+      cursor: pointer;
+      border-bottom: 1px solid #e2e8f0;
+      display: flex;
+      justify-content: space-between;
+    }
+    .ms-select-all:hover { background: #f7fafc; }
+    .ms-count-badge {
+      background: #3182ce;
+      color: #fff;
+      border-radius: 20px;
+      padding: 1px 8px;
+      font-size: .72rem;
+      font-weight: 700;
+    }
+
+    .filter-hint {
+      font-size: .75rem;
+      color: #a0aec0;
+      margin-top: 4px;
+    }
+
+    /* ─── Buttons ──────────────────────────────────── */
+    .btn-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: flex-end;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 10px 20px;
+      border-radius: 8px;
+      border: none;
+      cursor: pointer;
+      font-size: .88rem;
+      font-weight: 600;
+      transition: opacity .15s, transform .1s;
+    }
+    .btn:hover { opacity: .88; transform: translateY(-1px); }
+    .btn:active { transform: translateY(0); }
+
+    .btn-primary { background: #3182ce; color: #fff; }
+    .btn-success { background: #38a169; color: #fff; }
+    .btn-outline {
+      background: transparent;
+      color: #3182ce;
+      border: 1.5px solid #3182ce;
+    }
+    .btn-outline:hover { background: #ebf8ff; opacity: 1; }
+
+    /* ─── Chart containers ─────────────────────────── */
+    #chart-container {
+      width: 100%;
+      height: 420px;
+    }
+    #chart-order-pct {
+      width: 100%;
+      height: 420px;
+    }
+
+    /* ─── Data table ───────────────────────────────── */
+    .table-wrapper {
+      overflow-x: auto;
+      border-radius: 8px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: .88rem;
+    }
+    thead th {
+      background: #2b6cb0;
+      color: #fff;
+      padding: 12px 16px;
+      text-align: left;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    thead th:first-child { border-radius: 8px 0 0 0; }
+    thead th:last-child  { border-radius: 0 8px 0 0; }
+    tbody tr { transition: background .12s; }
+    tbody tr:nth-child(even) { background: #f7fafc; }
+    tbody tr:hover { background: #ebf8ff; }
+    tbody td {
+      padding: 11px 16px;
+      border-bottom: 1px solid #e2e8f0;
+      white-space: nowrap;
+    }
+    td.num { text-align: right; font-variant-numeric: tabular-nums; }
+    .badge-rank {
+      display: inline-block;
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      background: #e2e8f0;
+      color: #4a5568;
+      font-size: .78rem;
+      font-weight: 700;
+      text-align: center;
+      line-height: 26px;
+    }
+    .badge-rank.gold   { background: #f6e05e; color: #7b5f00; }
+    .badge-rank.silver { background: #e2e8f0; color: #4a5568; }
+    .badge-rank.bronze { background: #f6ad55; color: #7b341e; }
+
+    /* ─── Loading / error state ────────────────────── */
+    .state-overlay {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      padding: 48px;
+      color: #718096;
+    }
+    .spinner {
+      width: 36px; height: 36px;
+      border: 4px solid #e2e8f0;
+      border-top-color: #3182ce;
+      border-radius: 50%;
+      animation: spin .8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .error-icon { font-size: 2rem; }
+
+    /* ─── Toast ────────────────────────────────────── */
+    #toast {
+      position: fixed;
+      bottom: 28px;
+      right: 28px;
+      padding: 12px 22px;
+      border-radius: 10px;
+      color: #fff;
+      font-size: .88rem;
+      font-weight: 600;
+      box-shadow: 0 4px 16px rgba(0,0,0,.2);
+      opacity: 0;
+      transform: translateY(16px);
+      transition: opacity .3s, transform .3s;
+      z-index: 999;
+      pointer-events: none;
+    }
+    #toast.show { opacity: 1; transform: translateY(0); }
+    #toast.success { background: #38a169; }
+    #toast.error   { background: #e53e3e; }
+    #toast.info    { background: #3182ce; }
+
+    /* ─── Responsive ───────────────────────────────── */
+    @media (max-width: 640px) {
+      header { flex-direction: column; gap: 6px; text-align: center; }
+      .btn-row { justify-content: stretch; }
+      .btn { width: 100%; justify-content: center; }
+    }
+  </style>
+</head>
+
+<body>
+
+<!-- ═══════════ HEADER ═══════════ -->
+<header>
+  <h1>📊 Dashboard Doanh Thu Sản Phẩm</h1>
+  <span id="last-updated">Đang tải dữ liệu…</span>
+</header>
+
+<!-- ═══════════ MAIN ═══════════ -->
+<main>
+
+  <!-- KPI cards -->
+  <div class="kpi-row">
+    <div class="kpi-card">
+      <div class="kpi-label">Tổng Doanh Thu</div>
+      <div class="kpi-value" id="kpi-revenue">–</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Số Sản Phẩm</div>
+      <div class="kpi-value" id="kpi-products">–</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Tổng Số Lượng</div>
+      <div class="kpi-value" id="kpi-qty">–</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Tổng Đơn Hàng</div>
+      <div class="kpi-value" id="kpi-orders">–</div>
+    </div>
+  </div>
+
+  <!-- Filter panel -->
+  <div class="panel">
+    <div class="panel-title">Bộ Lọc Sản Phẩm</div>
+    <div class="filter-section">
+      <div class="filter-group">
+        <label>Chọn sản phẩm (Product ID) <span id="selected-count" class="ms-count-badge" style="display:none"></span></label>
+
+        <!-- Custom searchable multi-select -->
+        <div class="ms-wrapper" id="ms-wrapper">
+          <div class="ms-input-box" id="ms-input-box" onclick="toggleDropdown()">
+            <span id="ms-placeholder" style="color:#a0aec0;font-size:.88rem;padding:2px 4px">Tìm kiếm hoặc chọn sản phẩm…</span>
+            <input type="text" class="ms-search" id="ms-search"
+                   placeholder="Nhập ID để tìm…"
+                   style="display:none"
+                   oninput="filterOptions(this.value)"
+                   onclick="event.stopPropagation()" />
+          </div>
+          <div class="ms-dropdown" id="ms-dropdown">
+            <div class="ms-select-all" id="ms-select-all" onclick="toggleSelectAll()">
+              <span>Chọn tất cả</span>
+              <span id="ms-total-count" style="color:#718096;font-weight:400"></span>
+            </div>
+            <div id="ms-options-list"></div>
+          </div>
+        </div>
+
+        <div class="filter-hint">Nhập ID để tìm nhanh · Bỏ chọn tất cả = xem toàn bộ</div>
+      </div>
+
+      <div class="btn-row" style="align-self:flex-end">
+        <button class="btn btn-primary" onclick="applyFilter()">
+          🔍 Áp Dụng
+        </button>
+        <button class="btn btn-outline" onclick="clearFilter()">
+          ✕ Xóa Lọc
+        </button>
+        <button class="btn btn-success" onclick="exportCSV()">
+          ⬇ Export CSV
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Biểu đồ doanh thu -->
+  <div class="panel">
+    <div class="panel-title">Biểu Đồ Tổng Doanh Thu Theo Sản Phẩm</div>
+    <div id="chart-container"></div>
+  </div>
+
+  <!-- Biểu đồ tỷ lệ % order -->
+  <div class="panel">
+    <div class="panel-title">Tỷ Lệ % Order Theo Sản Phẩm</div>
+    <div id="chart-order-pct"></div>
+  </div>
+
+  <!-- Table panel -->
+  <div class="panel">
+    <div class="panel-title">Chi Tiết Doanh Thu</div>
+    <div class="table-wrapper">
+      <div id="table-area">
+        <div class="state-overlay"><div class="spinner"></div><span>Đang tải…</span></div>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<!-- ═══════════ TOAST ═══════════ -->
+<div id="toast"></div>
+
+<!-- ═══════════ SCRIPT ═══════════ -->
+<script>
+  // ─── Global state ───────────────────────────────────
+  let allData     = [];   // records from API
+  let chart       = null; // Highcharts bar – doanh thu
+  let chartOrder  = null; // Highcharts bar – tỷ lệ % order
+  let selectedIds = new Set();
+  let allProducts = [];
+  let visibleIds  = [];
+
+  // ─── Formatters ─────────────────────────────────────
+  const fmt = n => new Intl.NumberFormat('vi-VN', {
+    style: 'currency', currency: 'USD',
+    minimumFractionDigits: 2, maximumFractionDigits: 2
+  }).format(n);
+  const fmtNum = n => new Intl.NumberFormat('vi-VN').format(n);
+
+  // ─── Toast ───────────────────────────────────────────
+  function showToast(msg, type = 'info', ms = 3000) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = 'show ' + type;
+    clearTimeout(t._timer);
+    t._timer = setTimeout(() => { t.className = ''; }, ms);
+  }
+
+  // ═══════════ CUSTOM MULTI-SELECT ════════════════════
+
+  // Close dropdown when clicking outside
+  document.addEventListener('click', e => {
+    if (!document.getElementById('ms-wrapper').contains(e.target)) {
+      closeDropdown();
+    }
+  });
+
+  function toggleDropdown() {
+    const dd = document.getElementById('ms-dropdown');
+    if (dd.classList.contains('open')) closeDropdown();
+    else openDropdown();
+  }
+
+  function openDropdown() {
+    document.getElementById('ms-dropdown').classList.add('open');
+    const search = document.getElementById('ms-search');
+    document.getElementById('ms-placeholder').style.display = 'none';
+    search.style.display = '';
+    search.focus();
+    filterOptions('');
+  }
+
+  function closeDropdown() {
+    document.getElementById('ms-dropdown').classList.remove('open');
+    const search = document.getElementById('ms-search');
+    search.value = '';
+    search.style.display = 'none';
+    // show placeholder only if nothing selected
+    document.getElementById('ms-placeholder').style.display =
+      selectedIds.size === 0 ? '' : 'none';
+  }
+
+  // Render the dropdown option rows (only what matches search)
+  function filterOptions(q) {
+    const term = q.trim().toLowerCase();
+    visibleIds = allProducts.filter(p =>
+      term === '' || String(p.id).includes(term)
+    );
+
+    const list = document.getElementById('ms-options-list');
+    if (visibleIds.length === 0) {
+      list.innerHTML = '<div class="ms-dropdown-empty">Không tìm thấy sản phẩm</div>';
+      return;
+    }
+
+    list.innerHTML = visibleIds.map(p => {
+      const sel = selectedIds.has(p.id) ? 'selected' : '';
+      const check = selectedIds.has(p.id) ? '✓' : '';
+      return `<div class="ms-option ${sel}" data-id="${p.id}" onclick="toggleOption(${p.id})">
+        <span class="ms-check">${check}</span>
+        SP ${p.id}
+      </div>`;
+    }).join('');
+
+    updateSelectAllLabel();
+  }
+
+  function toggleOption(id) {
+    if (selectedIds.has(id)) selectedIds.delete(id);
+    else selectedIds.add(id);
+    filterOptions(document.getElementById('ms-search').value);
+    renderChips();
+  }
+
+  function toggleSelectAll() {
+    const allVisible = visibleIds.every(p => selectedIds.has(p.id));
+    if (allVisible) {
+      visibleIds.forEach(p => selectedIds.delete(p.id));
+    } else {
+      visibleIds.forEach(p => selectedIds.add(p.id));
+    }
+    filterOptions(document.getElementById('ms-search').value);
+    renderChips();
+  }
+
+  function updateSelectAllLabel() {
+    const allVisible = visibleIds.length > 0 &&
+                       visibleIds.every(p => selectedIds.has(p.id));
+    document.getElementById('ms-select-all').querySelector('span').textContent =
+      allVisible ? 'Bỏ chọn tất cả' : 'Chọn tất cả';
+  }
+
+  // Render chips in the input box
+  function renderChips() {
+    const box = document.getElementById('ms-input-box');
+    // Remove old chips
+    box.querySelectorAll('.ms-chip').forEach(c => c.remove());
+
+    const search = document.getElementById('ms-search');
+    const placeholder = document.getElementById('ms-placeholder');
+
+    if (selectedIds.size === 0) {
+      placeholder.style.display = '';
+      search.style.display = 'none';
+    } else {
+      placeholder.style.display = 'none';
+      // Insert chips before search input
+      const arr = [...selectedIds].sort((a, b) => a - b);
+      arr.forEach(id => {
+        const chip = document.createElement('span');
+        chip.className = 'ms-chip';
+        chip.innerHTML = `SP ${id} <span class="ms-chip-remove" onclick="removeChip(${id},event)">×</span>`;
+        box.insertBefore(chip, search);
+      });
+      search.style.display = '';
+    }
+
+    // Update count badge
+    const badge = document.getElementById('selected-count');
+    if (selectedIds.size > 0) {
+      badge.textContent = selectedIds.size + ' đã chọn';
+      badge.style.display = '';
+    } else {
+      badge.style.display = 'none';
+    }
+  }
+
+  function removeChip(id, event) {
+    event.stopPropagation();
+    selectedIds.delete(id);
+    renderChips();
+    filterOptions(document.getElementById('ms-search').value);
+  }
+
+  // ─── Base URL: tự detect khi mở qua Flask vs file:// ──
+  const BASE = (location.protocol === 'file:')
+    ? 'http://localhost:5050'
+    : '';
+
+  // ─── Load product list into custom select ───────────
+  async function loadProducts() {
+    try {
+      const res = await fetch(BASE + '/api/products');
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const json = await res.json();
+
+      allProducts = json.products.map(id => ({ id }));
+      document.getElementById('ms-total-count').textContent =
+        allProducts.length + ' sản phẩm';
+    } catch (e) {
+      showToast('Không thể tải danh sách sản phẩm: ' + e.message, 'error');
+    }
+  }
+
+  // ═══════════ DATA FETCH ══════════════════════════════
+
+  function buildQuery() {
+    return selectedIds.size
+      ? '?ids=' + [...selectedIds].join(',')
+      : '';
+  }
+
+  async function fetchData(query = '') {
+    document.getElementById('table-area').innerHTML =
+      '<div class="state-overlay"><div class="spinner"></div><span>Đang tải dữ liệu…</span></div>';
+
+    try {
+      const res = await fetch(BASE + '/api/doanh-thu-san-pham' + query);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.loi || 'HTTP ' + res.status);
+      }
+      const json = await res.json();
+      allData = json.du_lieu || [];
+      renderKPI(allData, json.tong_order_toan_bo || 0);
+      renderChart(allData);
+      renderOrderPctChart(allData, json.tong_order_toan_bo || 0);
+      renderTable(allData);
+
+      document.getElementById('last-updated').textContent =
+        'Cập nhật lúc ' + new Date().toLocaleString('vi-VN');
+    } catch (e) {
+      document.getElementById('table-area').innerHTML =
+        `<div class="state-overlay">
+           <span class="error-icon">⚠️</span>
+           <span>Lỗi: ${e.message}</span>
+         </div>`;
+      showToast('Lỗi tải dữ liệu: ' + e.message, 'error');
+    }
+  }
+
+  // ═══════════ RENDER ══════════════════════════════════
+
+  function renderKPI(data, tongOrderToanBo) {
+    const totalRevenue = data.reduce((s, r) => s + r.tong_doanh_thu, 0);
+    const totalQty     = data.reduce((s, r) => s + r.tong_so_luong,  0);
+    const totalOrders  = data.reduce((s, r) => s + r.so_don_hang,    0);
+    document.getElementById('kpi-revenue').textContent  = fmt(totalRevenue);
+    document.getElementById('kpi-products').textContent = fmtNum(data.length);
+    document.getElementById('kpi-qty').textContent      = fmtNum(totalQty);
+    document.getElementById('kpi-orders').textContent   = fmtNum(totalOrders);
+  }
+
+  function renderChart(data) {
+    const sorted  = [...data].sort((a, b) => b.tong_doanh_thu - a.tong_doanh_thu);
+    const MAX_BARS = 30;
+    const display  = sorted.slice(0, MAX_BARS);
+
+    const categories = display.map(r => 'SP ' + r.ma_san_pham);
+    const revenues   = display.map(r => parseFloat(r.tong_doanh_thu.toFixed(2)));
+    const colors     = revenues.map((_, i) => {
+      if (i === 0) return '#f6e05e';
+      if (i === 1) return '#cbd5e0';
+      if (i === 2) return '#f6ad55';
+      return '#3182ce';
+    });
+
+    if (chart) chart.destroy();
+
+    chart = Highcharts.chart('chart-container', {
+      chart: {
+        type: 'column',
+        backgroundColor: '#fff',
+        style: { fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif" },
+        animation: { duration: 500 }
+      },
+      title: { text: null },
+      xAxis: {
+        categories,
+        crosshair: true,
+        labels: {
+          rotation: categories.length > 12 ? -45 : 0,
+          style: { fontSize: '11px', color: '#4a5568' }
+        }
+      },
+      yAxis: {
+        title: { text: 'Doanh Thu (USD)', style: { color: '#718096' } },
+        labels: {
+          formatter() {
+            return '$' + Highcharts.numberFormat(this.value, 0, '.', ',');
+          },
+          style: { color: '#718096' }
+        },
+        gridLineColor: '#f0f2f5'
+      },
+      tooltip: {
+        shared: true,
+        useHTML: true,
+        formatter() {
+          const r = display[this.points[0].point.index];
+          return `<div style="padding:6px 10px;font-size:13px">
+            <b style="color:#2b6cb0">${this.x}</b><br/>
+            💰 Doanh Thu: <b>$${Highcharts.numberFormat(r.tong_doanh_thu, 2, '.', ',')}</b><br/>
+            📦 Số Lượng: <b>${Highcharts.numberFormat(r.tong_so_luong, 0, '.', ',')}</b><br/>
+            🏷 Đơn Giá TB: <b>$${Highcharts.numberFormat(r.don_gia_tb, 2, '.', ',')}</b><br/>
+            🧾 Đơn Hàng: <b>${Highcharts.numberFormat(r.so_don_hang, 0, '.', ',')}</b>
+          </div>`;
+        }
+      },
+      plotOptions: {
+        column: {
+          borderRadius: 4,
+          colorByPoint: true,
+          colors,
+          dataLabels: {
+            enabled: display.length <= 15,
+            formatter() {
+              return '$' + Highcharts.numberFormat(this.y / 1000, 1) + 'K';
+            },
+            style: { fontSize: '10px', fontWeight: '600', color: '#2d3748', textOutline: 'none' }
+          }
+        }
+      },
+      legend: { enabled: false },
+      credits: { enabled: false },
+      exporting: {
+        enabled: true,
+        buttons: { contextButton: { menuItems: ['viewFullscreen', 'separator', 'downloadPNG', 'downloadSVG'] } }
+      },
+      series: [{ name: 'Doanh Thu', data: revenues }]
+    });
+
+    if (sorted.length > MAX_BARS) {
+      showToast(`Hiển thị top ${MAX_BARS} sản phẩm có doanh thu cao nhất`, 'info');
+    }
+  }
+
+  // ─── Bar chart: tỷ lệ % order ───────────────────────
+  function renderOrderPctChart(data, tongOrderToanBo) {
+    if (chartOrder) chartOrder.destroy();
+
+    const sorted   = [...data].sort((a, b) => b.ty_le_order_pct - a.ty_le_order_pct);
+    const MAX_BARS = 30;
+    const display  = sorted.slice(0, MAX_BARS);
+
+    const categories = display.map(r => 'SP ' + r.ma_san_pham);
+    const values     = display.map(r => r.ty_le_order_pct);
+    const colors     = values.map((_, i) => {
+      if (i === 0) return '#805ad5';
+      if (i === 1) return '#9f7aea';
+      if (i === 2) return '#b794f4';
+      return '#d6bcfa';
+    });
+
+    chartOrder = Highcharts.chart('chart-order-pct', {
+      chart: {
+        type: 'column',
+        backgroundColor: '#fff',
+        style: { fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif" },
+        animation: { duration: 500 }
+      },
+      title: { text: null },
+      subtitle: {
+        text: `Mẫu số: ${Highcharts.numberFormat(tongOrderToanBo, 0, '.', ',')} orders`,
+        style: { fontSize: '11px', color: '#718096' }
+      },
+      xAxis: {
+        categories,
+        crosshair: true,
+        labels: {
+          rotation: categories.length > 12 ? -45 : 0,
+          style: { fontSize: '11px', color: '#4a5568' }
+        }
+      },
+      yAxis: {
+        title: { text: 'Tỷ Lệ Order (%)', style: { color: '#718096' } },
+        labels: {
+          formatter() { return this.value + '%'; },
+          style: { color: '#718096' }
+        },
+        gridLineColor: '#f0f2f5'
+      },
+      tooltip: {
+        shared: true,
+        useHTML: true,
+        formatter() {
+          const r = display[this.points[0].point.index];
+          return `<div style="padding:6px 10px;font-size:13px">
+            <b style="color:#805ad5">${this.x}</b><br/>
+            📋 Số order: <b>${Highcharts.numberFormat(r.so_don_hang, 0, '.', ',')}</b><br/>
+            📊 Tỷ lệ: <b>${r.ty_le_order_pct}%</b>
+          </div>`;
+        }
+      },
+      plotOptions: {
+        column: {
+          borderRadius: 4,
+          colorByPoint: true,
+          colors,
+          dataLabels: {
+            enabled: display.length <= 15,
+            formatter() { return this.y + '%'; },
+            style: { fontSize: '10px', fontWeight: '600', color: '#553c9a', textOutline: 'none' }
+          }
+        }
+      },
+      legend: { enabled: false },
+      credits: { enabled: false },
+      exporting: { enabled: false },
+      series: [{ name: 'Tỷ lệ order', data: values }]
+    });
+
+    if (sorted.length > MAX_BARS) {
+      showToast(`Biểu đồ % order: hiển thị top ${MAX_BARS} sản phẩm`, 'info');
+    }
+  }
+
+  function renderTable(data) {
+    if (!data.length) {
+      document.getElementById('table-area').innerHTML =
+        '<div class="state-overlay"><span>Không có dữ liệu phù hợp.</span></div>';
+      return;
+    }
+
+    const sorted = [...data].sort((a, b) => b.tong_doanh_thu - a.tong_doanh_thu);
+    const rows = sorted.map((r, i) => {
+      const rankClass = ['gold', 'silver', 'bronze'][i] ?? '';
+      const pct = sorted[0].tong_doanh_thu > 0
+        ? ((r.tong_doanh_thu / sorted[0].tong_doanh_thu) * 100).toFixed(1) : 0;
+      return `<tr>
+        <td><span class="badge-rank ${rankClass}">${i + 1}</span></td>
+        <td><b>SP ${r.ma_san_pham}</b></td>
+        <td class="num">${fmt(r.tong_doanh_thu)}</td>
+        <td class="num">
+          <div style="display:flex;align-items:center;gap:8px;justify-content:flex-end">
+            <div style="background:#e2e8f0;border-radius:4px;width:80px;height:8px;overflow:hidden">
+              <div style="background:#3182ce;height:100%;width:${pct}%;border-radius:4px"></div>
+            </div>
+            ${pct}%
+          </div>
+        </td>
+        <td class="num">${fmtNum(r.tong_so_luong)}</td>
+        <td class="num">${fmt(r.don_gia_tb)}</td>
+        <td class="num">${fmtNum(r.so_don_hang)}</td>
+        <td class="num">
+          <div style="display:flex;align-items:center;gap:8px;justify-content:flex-end">
+            <div style="background:#e2e8f0;border-radius:4px;width:60px;height:8px;overflow:hidden">
+              <div style="background:#805ad5;height:100%;width:${Math.min(r.ty_le_order_pct * 3, 100)}%;border-radius:4px"></div>
+            </div>
+            <span style="color:#805ad5;font-weight:700">${r.ty_le_order_pct}%</span>
+          </div>
+        </td>
+      </tr>`;
+    }).join('');
+
+    document.getElementById('table-area').innerHTML = `
+      <table>
+        <thead><tr>
+          <th>#</th><th>Mã Sản Phẩm</th><th>Tổng Doanh Thu</th>
+          <th>% So Với #1</th><th>Tổng Số Lượng</th>
+          <th>Đơn Giá TB</th><th>Số Đơn Hàng</th><th>Tỷ Lệ Order %</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`;
+  }
+
+  // ═══════════ ACTIONS ═════════════════════════════════
+
+  function applyFilter() {
+    closeDropdown();
+    if (selectedIds.size > 0) {
+      showToast(`Đang lọc ${selectedIds.size} sản phẩm…`, 'info', 1500);
+    }
+    fetchData(buildQuery());
+  }
+
+  function clearFilter() {
+    selectedIds.clear();
+    renderChips();
+    closeDropdown();
+    fetchData();
+    showToast('Đã xóa bộ lọc – hiển thị tất cả sản phẩm', 'success', 2000);
+  }
+
+  function exportCSV() {
+    showToast('Đang chuẩn bị file CSV…', 'info', 2000);
+    const a = document.createElement('a');
+    a.href = BASE + '/api/download-csv' + buildQuery();
+    a.download = 'doanh_thu_san_pham.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => showToast('Tải xuống thành công!', 'success'), 1000);
+  }
+
+  // ═══════════ INIT ════════════════════════════════════
+  (async function init() {
+    await loadProducts();   // fast: chỉ fetch danh sách ID
+    await fetchData();      // fetch dữ liệu doanh thu
+  })();
+</script>
+
+</body>
+</html>
