@@ -1,5 +1,0 @@
-flask
-pandas
-pymysql==1.2.0
-sqlalchemy==2.0.52
-python-dotenv==1.2.1
